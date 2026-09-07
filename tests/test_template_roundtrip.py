@@ -32,3 +32,57 @@ def test_source_guess_stable_when_marker_repeated(tmp_path):
     usr_dec = "".join(r["decoded_piece"] for r in rows if r["source_guess"] == "user")
     assert sys_dec.count("SYS_CANARY_ABCDEF") == 1
     assert usr_dec.count("SYS_CANARY_ABCDEF") == 1
+
+
+# ---- run_attacks 编排（stub backend，纯结构验证）----
+import re
+from pathlib import Path
+from src.run_attacks import run_experiments
+from src.common import make_run_dir, read_jsonl, load_yaml
+
+
+class StubGenBackend:
+    """无权重 backend：只有 standard 轨；surfaces 提取走 apply_template 字符串。"""
+
+    backend_name = "stub"
+    quant = None
+    device = "cpu"
+    loaded = True
+    model = object()
+    model_id = "stub"
+    revision = "rev-local"
+
+    def __init__(self):
+        self.mode = "nostop_greedy"
+
+    def apply_template(self, msgs, add_generation_prompt=False, tokenize=False):
+        return "".join(f"<{m['role']}>{m.get('content', '')}</>" for m in msgs)
+
+    def ids_from_messages(self, msgs):
+        return {"input_ids": list(range(1, 9)), "attention_mask": [1] * 8}
+
+    def decode(self, ids, skip_special_tokens=False):
+        return "BLOCKED"
+
+    def generate_standard(self, *a, **k):
+        return {"output_ids": [1] * 8 + [2] * 5, "meta": {}}
+
+
+def test_run_experiments_e5_writes_jsonl_and_metrics(tmp_path):
+    ROOT = Path(__file__).resolve().parents[1]
+    gen = load_yaml(ROOT / "configs/generation.yaml")
+    d = make_run_dir(tmp_path, "t1")
+    res = run_experiments(StubGenBackend(), ["E5"], "stub", d, gen, n_canaries=3)
+    files = list((d / "cases").glob("*.jsonl"))
+    assert len(files) == 1
+    rows = read_jsonl(files[0])
+    assert len(rows) == 3  # stub 无 forward_next_logits → 只有 standard_greedy 轨
+    ids = [r["case_id"] for r in rows]
+    assert len(set(ids)) == 3 and all(re.match(r"stub_e5_plain_\d{4}", i) for i in ids)
+    # metrics 汇总行（Task 17 接线）
+    mp = d / "metrics.json"
+    assert mp.exists()
+    mrows = read_jsonl(mp)
+    assert any(r["experiment"] == "E5" and r["attack"] == "plain" and r["n"] == 3
+               and r["mode"] == "standard_greedy" for r in mrows)
+    assert res["cases_run"] == 3 and res["metrics_rows"] == 1
