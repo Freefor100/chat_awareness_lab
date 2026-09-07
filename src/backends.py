@@ -2,7 +2,7 @@
 #
 # 加载链 (load_backend)：AutoTokenizer 必须先成功；tokenizer_only=True 到此为止
 # (loaded=True, model=None)。需要权重时按序尝试（每档隔离：异常 → 记录 + 下一档）：
-#   1. causal_bf16        AutoModelForCausalLM,  device_map="auto", bf16
+#   1. causal_bf16        AutoModelForCausalLM,  device_map=_cuda_map(), bf16
 #   2. multimodal_bf16    AutoModelForMultimodalLM, 同上（Qwen3.5 是 image-text-to-text）
 #   3. causal_int4_bnb    AutoModelForCausalLM + BitsAndBytesConfig 4bit
 #   4. multimodal_int4_bnb AutoModelForMultimodalLM + BitsAndBytesConfig 4bit
@@ -23,6 +23,18 @@ from pathlib import Path
 # transformers 的 AutoTokenizer（避免模块导入期依赖 transformers/torch）。
 # tests/test_backends.py monkeypatch 这个名字以强制使用真实实现。
 AutoTokenizer = None
+
+
+def _cuda_map() -> str:
+    """单 GPU 主机强制全模型上 GPU（避免 device_map=auto 在显存紧张时把层分到 CPU，
+    导致生成慢 10 倍以上）。OOM 会正常抛错并沿加载链回退。"""
+    try:
+        import torch
+        if torch.cuda.is_available() and torch.cuda.device_count() >= 1:
+            return "cuda:0"
+    except Exception:
+        pass
+    return "auto"
 
 
 def _is_hf_id(s: str) -> bool:
@@ -110,17 +122,16 @@ class Backend:
                           do_sample):
         self._require_model()
         import torch
-        from transformers import GenerationConfig
-        gc = GenerationConfig.from_model_config(self.model.config)
-        gc.temperature = temperature
-        gc.top_p = top_p
-        gc.do_sample = do_sample
-        gc.max_new_tokens = max_new_tokens
         if do_sample:
             torch.manual_seed(seed)
-        inp = {"input_ids": torch.tensor([input_ids], device=self.model.device)}
-        attn = torch.ones_like(inp["input_ids"])
-        out = self.model.generate(**inp, attention_mask=attn, generation_config=gc)
+        inp = {"input_ids": torch.tensor([input_ids], device=self.model.device),
+               "attention_mask": torch.ones(len(input_ids), dtype=torch.long,
+                                            device=self.model.device).unsqueeze(0)}
+        # 以 generate kwargs 传参（部分模型 generation_config 白名单化，
+        # 通过 GenerationConfig 设置的 temperature 会被忽略并告警）
+        out = self.model.generate(**inp, max_new_tokens=max_new_tokens,
+                                  do_sample=do_sample, temperature=temperature,
+                                  top_p=top_p)
         return {"output_ids": out[0].tolist(), "meta": {"mode": "standard",
                                                         "seed": seed, "quant": self.quant,
                                                         "device": self.device,
@@ -132,6 +143,16 @@ class Backend:
         inp = torch.tensor([input_ids], device=self.model.device)
         with torch.no_grad():
             return self.model(input_ids=inp).logits[0, -1]  # (vocab,)
+
+    def forward_step(self, token_ids, past=None):
+        """单步增量前向（KV cache）：manual_decode 高速路径。"""
+        self._require_model()
+        import torch
+        inp = torch.tensor([token_ids], device=self.model.device)
+        kw = {} if past is None else {"past_key_values": past}
+        with torch.no_grad():
+            out = self.model(input_ids=inp, use_cache=True, **kw)
+        return out.logits[0, -1], getattr(out, "past_key_values", None)
 
     # ---- 加载主链：tokenizer(transformers → mistral-common 兜底) → 权重档位 ----
     def _load(self, cfg: dict):
@@ -226,14 +247,14 @@ class Backend:
         # 1. causal bf16，device_map="auto"（优先档：GPU 显存足够即命中）
         def causal():
             return AutoModelForCausalLM.from_pretrained(
-                self.model_id, revision=self.revision, device_map="auto",
+                self.model_id, revision=self.revision, device_map=_cuda_map(),
                 torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
         acts.append(("causal_bf16", causal, None))
 
         # 2. multimodal（Qwen3.5 注册为 image-text-to-text，causal 类不认识其架构）
         def mm():
             return AutoModelForMultimodalLM.from_pretrained(
-                self.model_id, revision=self.revision, device_map="auto",
+                self.model_id, revision=self.revision, device_map=_cuda_map(),
                 torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
         acts.append(("multimodal_bf16", mm, None))
 
@@ -244,7 +265,7 @@ class Backend:
             qc = BitsAndBytesConfig(load_in_4bit=True,
                                     bnb_4bit_compute_dtype=torch.bfloat16)
             return AutoModelForCausalLM.from_pretrained(
-                self.model_id, revision=self.revision, device_map="auto",
+                self.model_id, revision=self.revision, device_map=_cuda_map(),
                 quantization_config=qc, low_cpu_mem_usage=True)
         acts.append(("causal_int4_bnb", bnb4, "int4_bnb"))
 
@@ -254,7 +275,7 @@ class Backend:
             qc = BitsAndBytesConfig(load_in_4bit=True,
                                     bnb_4bit_compute_dtype=torch.bfloat16)
             return AutoModelForMultimodalLM.from_pretrained(
-                self.model_id, revision=self.revision, device_map="auto",
+                self.model_id, revision=self.revision, device_map=_cuda_map(),
                 quantization_config=qc, low_cpu_mem_usage=True)
         acts.append(("multimodal_int4_bnb", mm_bnb4, "int4_bnb"))
 
@@ -265,7 +286,7 @@ class Backend:
         def torchao4():
             import torchao
             m = AutoModelForCausalLM.from_pretrained(
-                self.model_id, revision=self.revision, device_map="auto",
+                self.model_id, revision=self.revision, device_map=_cuda_map(),
                 torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
             from torchao.quantization import quantize_
             try:
@@ -292,7 +313,7 @@ class Backend:
             from transformers import AutoModelForCausalLM
             return AutoModelForCausalLM.from_pretrained(
                 self.model_id, revision=self.revision, trust_remote_code=True,
-                device_map="auto", torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
+                device_map=_cuda_map(), torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
         acts.append(("causal_remote", remote, None))
 
         class T:

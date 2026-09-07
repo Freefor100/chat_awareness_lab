@@ -35,15 +35,32 @@ def manual_generate(backend, input_ids: list[int], max_new_tokens: int,
                     do_sample: bool) -> dict:
     """逐 token 自回归；不以 EOS 停止，只跑满 max_new_tokens。
 
-    返回 {"output_ids": 完整序列（含 prompt）, "meta": {...}}，
-    与 Backend.generate_standard 的返回形状一致。
+    backend 提供 forward_step(token_ids, past) 时走增量 KV 路径（近线性，
+    与 generate 同速）；否则回退全量 forward_next_logits。
+    返回 {"output_ids": 完整序列（含 prompt）, "meta": {...}}。
     """
     if do_sample:
         torch.manual_seed(seed)
     ids = list(input_ids)
-    meta = {"mode": "nostop", "seed": seed}
-    for _ in range(max_new_tokens):
-        logits = backend.forward_next_logits(ids)
+    meta = {"mode": "nostop", "seed": seed, "kv_path": None}
+    use_kv = hasattr(backend, "forward_step")
+    past = None
+    for step in range(max_new_tokens):
+        if use_kv:
+            try:
+                if step == 0 or past is not None:
+                    inp = ids if step == 0 else [ids[-1]]
+                    logits, past = backend.forward_step(inp, past)
+                    if step == 0:
+                        meta["kv_path"] = "kv"
+                else:  # KV 断链后回到全量
+                    logits = backend.forward_next_logits(ids)
+            except Exception:
+                use_kv = False
+                meta["kv_path"] = "full-fallback"
+                logits = backend.forward_next_logits(ids)
+        else:
+            logits = backend.forward_next_logits(ids)
         if do_sample:
             tok = _sample_token(logits, temperature, top_p)
         else:

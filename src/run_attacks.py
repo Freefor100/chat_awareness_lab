@@ -2,8 +2,10 @@
 
 E4 的 labeled ref 用 render_context 对 ground-truth messages 渲染后按
 source_guess 聚合；A10 直接 token-ID 注入在 user 尾边界拼真实 control ids。
+环境变量 CHATLAB_MAX_NEW_TOKENS 可临时收紧生成上限（smoke 调参用）。
 """
 
+import os
 from pathlib import Path
 
 from src.common import append_jsonl, read_jsonl, load_yaml
@@ -128,6 +130,8 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
                 for mode in eff_modes:
                     mn = gen_cfg["reproduction_max_new_tokens"] \
                         if exp in ("E1", "E2", "E4") else gen_cfg["max_new_tokens"]
+                    if os.environ.get("CHATLAB_MAX_NEW_TOKENS"):
+                        mn = int(os.environ["CHATLAB_MAX_NEW_TOKENS"])
                     kw = {}
                     if exp == "E6" and atk == "A10":
                         if not surfaces or not surface_ids.get("sys_open", {}) \
