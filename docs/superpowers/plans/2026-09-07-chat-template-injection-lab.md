@@ -1237,7 +1237,7 @@ def test_render_context_rows_and_sources(tmp_path):
     out = render_and_tokenize(tok, msgs, add_generation_prompt=True)
     assert out["rendered_prompt"] == tok.apply_chat_template(msgs, tokenize=False,
                                                              add_generation_prompt=True)
-    assert out["input_ids"] == out["token_rows"][-1]["token_id"] and len(out["input_ids"]) == len(out["token_rows"])
+    assert out["input_ids"] == [r["token_id"] for r in out["token_rows"]] and len(out["input_ids"]) == len(out["token_rows"])
     rows = out["token_rows"]
     sys_rows = [r for r in rows if r["source_guess"] == "system"]
     usr_rows = [r for r in rows if r["source_guess"] == "user"]
@@ -1297,7 +1297,7 @@ def annotate_sources(rendered: str, ids: list[int], tokenizer, messages: list[di
     if add_generation_prompt:
         # generation prompt = 渲染串末尾的 assistant 引导部分（无 content 与之对应）
         # 取最后一个 content 结束后的文本
-        last_end = max((s + e for s, e, _ in spans), default=0)
+        last_end = max((e for _, e, _ in spans), default=0)
         spans.append((last_end, len(rendered), "generation_prompt"))
     spans.sort()
     # 2) 字符边界 → token 边界：增量 encode 前缀得到累计长度
@@ -1396,7 +1396,7 @@ def test_collision_absent_for_plain_text(tmp_path):
 def test_candidate_attack_texts_use_surfaces(tmp_path):
     from tests.fixtures.toy import make_toy_tokenizer, TOY_STYLES
     tok = make_toy_tokenizer(tmp_path, TOY_STYLES["chatml"])
-    render = lambda msgs: tok.apply_chat_template(msgs, tokenize=False)
+    render = lambda msgs, add_gen=False: tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=add_gen)
     s = extract_surfaces(render)
     cands = candidate_attack_texts(s, "SYS_CANARY_1A2B3C")
     # 注入串必须包含真实 system 表面
