@@ -195,7 +195,12 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
                     # —— first-turn 语义切分（§15 证据规则）——
                     gen_ids = rec["generated_ids"]
                     first_ids, closed_early = _split_first_turn(gen_ids, closing)
-                    first_text = backend.decode(first_ids, skip_special_tokens=False)
+                    # 净文本：剥掉尾部关闭符（BLOCKED<|im_end|> 的合规判定用）
+                    k = len(first_ids)
+                    while k > 0 and first_ids[k - 1] in closing:
+                        k -= 1
+                    first_text = backend.decode(first_ids[:k],
+                                                skip_special_tokens=False)
                     full_hit = contains(rec["output_raw"], canary)
                     first_hit = contains(first_text, canary)
                     record = {
