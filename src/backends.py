@@ -301,6 +301,27 @@ class Backend:
                 self.load = f
                 self.quant = q
 
+        # CHATLAB_QUANT 显式量化偏好（本机 4GB 显存被桌面占用时用）：
+        #   bf16        → 只试 GPU bf16 档（causal/multimodal）
+        #   int4_bnb    → 先 bnb 4bit 档（causal/multimodal），失败回退 torchao/CPU
+        #   int4_torchao→ 先 torchao 4bit 档，失败回退 CPU
+        #   cpu         → 直接 CPU bf16
+        import os
+        pref = os.environ.get("CHATLAB_QUANT", "").strip().lower()
+        if pref == "bf16":
+            acts = [a for a in acts if a[2] is None and a[0].endswith("_cpu") is False
+                    and not a[0].endswith("_remote")]
+        elif pref == "int4_bnb":
+            bnb_acts = [a for a in acts if a[2] == "int4_bnb"]
+            rest = [a for a in acts if a not in bnb_acts
+                    and (a[2] == "int4_torchao" or a[0].endswith("_cpu"))]
+            acts = bnb_acts + rest
+        elif pref == "int4_torchao":
+            acts = [a for a in acts if a[2] == "int4_torchao"
+                    or a[0].endswith("_cpu")]
+        elif pref == "cpu":
+            acts = [a for a in acts if a[0].endswith("_cpu")]
+
         return [T(n, f, q) for n, f, q in acts]
 
 
