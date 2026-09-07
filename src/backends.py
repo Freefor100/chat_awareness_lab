@@ -135,6 +135,11 @@ class Backend:
 
     # ---- 加载主链：tokenizer(transformers → mistral-common 兜底) → 权重档位 ----
     def _load(self, cfg: dict):
+        import os
+        from src.common import hub_reachable
+        # 断网时走本地快照：避免 transformers 对已缓存文件做网络 etag 检查而长超时
+        if not hub_reachable():
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
         tok_cls = AutoTokenizer  # 模块级钩子（测试可 monkeypatch src.backends.AutoTokenizer）
         if tok_cls is None:
             from transformers import AutoTokenizer as _AT  # 惰性局部 import

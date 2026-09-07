@@ -66,13 +66,36 @@ def env_snapshot() -> dict:
         snap["nvidia_smi"] = f"error: {e}"
     return snap
 
+def _snapshot_ref(model_id: str) -> str | None:
+    """离线 fallback：从 HF 快照缓存读主分支 commit（无网络时仍可固定 revision）。"""
+    repo = model_id.replace("/", "--")
+    ref = (Path.home() / ".cache" / "huggingface" / "hub" / f"models--{repo}"
+           / "refs" / "main")
+    try:
+        v = ref.read_text().strip()
+        return v or None
+    except Exception:
+        return None
+
 def hf_resolve_revision(model_id: str) -> str:
     from huggingface_hub import model_info
-    return model_info(model_id).sha  # "0123abcd..." 主分支 commit
+    try:
+        return model_info(model_id).sha  # "0123abcd..." 主分支 commit
+    except Exception:
+        ref = _snapshot_ref(model_id)
+        if ref:
+            return ref
+        raise
 
 def hf_download(model_id: str, filename: str, revision: str) -> Path:
     from huggingface_hub import hf_hub_download
-    return Path(hf_hub_download(repo_id=model_id, filename=filename, revision=revision))
+    try:
+        return Path(hf_hub_download(repo_id=model_id, filename=filename,
+                                    revision=revision))
+    except Exception:
+        # 网络不可用 → 只查本地快照
+        return Path(hf_hub_download(repo_id=model_id, filename=filename,
+                                    revision=revision, local_files_only=True))
 
 def template_sha256(model_id: str, revision: str) -> str:
     try:
@@ -87,3 +110,13 @@ def model_cfg(models_yaml: Path, key: str) -> dict:
         if m["key"] == key:
             return m
     raise KeyError(f"model key '{key}' not in {models_yaml}: {[m['key'] for m in cfg['models']]}")
+
+
+def hub_reachable(host: str = "huggingface.co", timeout: float = 2.0) -> bool:
+    """快速 TCP 探测 HF Hub 可达性（断网时避免 transformers/httpx 长超时）。"""
+    import socket
+    try:
+        with socket.create_connection((host, 443), timeout=timeout):
+            return True
+    except Exception:
+        return False
