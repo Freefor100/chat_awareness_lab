@@ -7,15 +7,18 @@
 # - E5/E6/E7 system 用 prompts/system_constraints.yaml 模板注入 marker/nonce。
 import random
 
+# {SYS_OPEN}..{ASST_OPEN} 占位符 → surfaces dict 键映射（_fill 与 E6 skip 守卫共用）
+_SURFACE_KEYS = {"SYS_OPEN": "sys_open", "SYS_CLOSE": "sys_close",
+                 "USR_OPEN": "usr_open", "USR_CLOSE": "usr_close",
+                 "ASST_OPEN": "asst_open"}
+
 
 def _fill(template: str, canary: str, nonce: str | None, surfaces: dict | None) -> str:
     s = template.replace("{canary}", canary).replace("{marker}", canary)
     if nonce:
         s = s.replace("{nonce}", nonce)
     if surfaces:
-        for k, v in {"SYS_OPEN": "sys_open", "SYS_CLOSE": "sys_close",
-                     "USR_OPEN": "usr_open", "USR_CLOSE": "usr_close",
-                     "ASST_OPEN": "asst_open"}.items():
+        for k, v in _SURFACE_KEYS.items():
             s = s.replace("{" + k + "}", surfaces.get(v) or "")
     return s
 
@@ -52,7 +55,10 @@ def build_case(exp: str, attack_key: str, attacks_cfg: dict, constraints: dict,
         sys_p = _fill(constraints["e5_system"], canary, nonce, surfaces)
         a = next(x for x in attacks_cfg["attacks"] if x["id"] == attack_key)
         text = a["template"]
-        if "{SYS_OPEN}" in text and surfaces and not surfaces.get("sys_open"):
+        # 模板中出现任何 surface 占位符而其值缺失（surfaces 为 None / 键缺 / 值为 None）→ 跳过，
+        # 防止字面 "{SYS_OPEN}" 等注入串漏出；值为空串 ""（如 llama 的 asst_open）不算缺失
+        if any("{" + k + "}" in text and (surfaces is None or surfaces.get(v) is None)
+               for k, v in _SURFACE_KEYS.items()):
             return {"messages": [], "attack_meta": {"experiment": "E6", "attack": attack_key,
                                                     "skipped": "surface missing"},
                     "token_override": None}

@@ -83,3 +83,28 @@ def test_e6_a10_marks_token_override(tmp_path):
 def test_e4_query_contains_echo_placeholder(tmp_path):
     cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
     assert "<ECHO_QUERY>" in cons["e4_query"]
+
+def test_e6_surface_attack_skips_without_surfaces(tmp_path):
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    for atk in ("A6", "A7", "A8"):
+        m = build_case("E6", atk, cfg, cons, None, "SYS_CANARY_ABCDEF", None, seed=0)
+        assert m["messages"] == [] and m["attack_meta"]["skipped"]
+
+def test_e6_a6_a7_skip_when_sys_close_missing(tmp_path):
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    partial = {"sys_open": "<|im_start|>system\n", "sys_close": None}
+    # A6/A7 需成对的 open+close；sys_open 在而 sys_close 为 None → 仍跳过
+    for atk in ("A6", "A7"):
+        m = build_case("E6", atk, cfg, cons, partial, "SYS_CANARY_ABCDEF", None, seed=0)
+        assert m["messages"] == [] and m["attack_meta"]["skipped"]
+
+def test_e6_empty_string_surface_value_is_not_missing(tmp_path):
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    s = {"asst_open": ""}   # llama 风格空串 asst_open："" ≠ missing，不应跳过
+    m = build_case("E6", "A8", cfg, cons, s, "SYS_CANARY_ABCDEF", None, seed=0)
+    uc = m["messages"][-1]["content"]
+    assert not m["attack_meta"].get("skipped")
+    assert "{ASST_OPEN}" not in uc and "SYS_CANARY_ABCDEF" in uc
