@@ -1,0 +1,75 @@
+# 模型 key 供 CLI 引用；revision 首次运行时由 hf_resolve_revision 回填（不手写）
+models:
+  - key: qwen3.5-0.8b
+    id: Qwen/Qwen3.5-0.8B
+    role: lite
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_bf16      # 预估加载档位（实际以 load_backend 记录为准）
+    e8_pair: qwen3.5-0.8b-base
+    enabled: true
+  - key: qwen3.5-0.8b-base
+    id: Qwen/Qwen3.5-0.8B-Base
+    role: base
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_bf16
+    e8_pair: qwen3.5-0.8b
+    enabled: true
+  - key: qwen3.5-2b
+    id: Qwen/Qwen3.5-2B
+    role: main
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_int4
+    e8_pair: qwen3.5-2b-base
+    enabled: true
+  - key: qwen3.5-2b-base
+    id: Qwen/Qwen3.5-2B-Base
+    role: base
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_int4
+    e8_pair: qwen3.5-2b
+    enabled: true
+  - key: qwen3.5-4b
+    id: Qwen/Qwen3.5-4B
+    role: main
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_int4
+    e8_pair: qwen3.5-4b-base
+    enabled: true
+  - key: qwen3.5-4b-base
+    id: Qwen/Qwen3.5-4B-Base
+    role: base
+    family: qwen35
+    is_multimodal: true
+    generation_tier: gpu_int4
+    e8_pair: qwen3.5-4b
+    enabled: true
+  - key: ministral-3-3b-instruct
+    id: mistralai/Ministral-3-3B-Instruct-2512
+    role: main
+    family: ministral3
+    is_multimodal: false
+    generation_tier: gpu_int4
+    e8_pair: ministral-3-3b-base
+    backend_hint: transformers_or_mistralcommon   # 运行时探测
+    enabled: true
+  - key: ministral-3-3b-base
+    id: mistralai/Ministral-3-3B-Base-2512
+    role: base
+    family: ministral3
+    is_multimodal: false
+    generation_tier: gpu_int4
+    e8_pair: ministral-3-3b-instruct
+    backend_hint: transformers_or_mistralcommon
+    enabled: true
+  - key: qwen3-4b-instruct-2507
+    id: Qwen/Qwen3-4B-Instruct-2507
+    role: legacy
+    family: qwen3
+    is_multimodal: false
+    generation_tier: gpu_int4
+    enabled: false        # 旧基线默认不开，需要时 CLI --include-legacy
