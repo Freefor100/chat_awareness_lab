@@ -23,12 +23,13 @@ CONTROL = "control"
 
 
 def render_and_tokenize(tokenizer, messages: list[dict], add_generation_prompt: bool) -> dict:
-    rendered = tokenizer.apply_chat_template(messages, tokenize=False,
-                                             add_generation_prompt=add_generation_prompt)
+    # 规范文本 = ids 的 decode(不跳 special)：与 token 序列一一对应，
+    # 避免 tokenize=False 再手工重编码（v5 对 mistral-common 后端明确告警 unsafe）。
     out = tokenizer.apply_chat_template(messages, tokenize=True,
                                         add_generation_prompt=add_generation_prompt,
                                         return_dict=True)
     input_ids = list(out["input_ids"])
+    rendered = tokenizer.decode(input_ids, skip_special_tokens=False)
     rows = annotate_sources(rendered, input_ids, tokenizer, messages, add_generation_prompt)
     return {"rendered_prompt": rendered, "input_ids": input_ids, "token_rows": rows}
 
@@ -55,14 +56,38 @@ def annotate_sources(rendered: str, ids: list[int], tokenizer, messages: list[di
         spans.append((last_end, len(rendered), "generation_prompt"))
     spans.sort()
     # 2) 字符边界 → token 边界：整串编码的 offsets（token i 覆盖 [offsets[i][0], offsets[i][1])）
-    enc = tokenizer(rendered, add_special_tokens=False).encodings[0]
-    ends = [e for _, e in enc.offsets]
+    #    slow tokenizer（MistralCommonBackend 等）无 .encodings → decode 长度二分 fallback
+    enc = tokenizer(rendered, add_special_tokens=False)
+    offsets = getattr(enc, "encodings", None)
+    ends = None
+    if offsets is not None and offsets[0] is not None:
+        ends = [e for _, e in offsets[0].offsets]
 
     def token_offset(char_pos: int) -> int:
         if char_pos <= 0:
             return 0
-        # 完全落在 rendered[:char_pos] 内的 token 数（end <= char_pos）
-        return bisect.bisect_right(ends, char_pos)
+        if ends is not None:
+            # 完全落在 rendered[:char_pos] 内的 token 数（end <= char_pos）
+            return bisect.bisect_right(ends, char_pos)
+        # slow 路径：最小 k 使 decode(ids[:k]) 长度 >= char_pos（解码长度单调不减）
+        n = len(ids)
+        cache = {}
+
+        def dec_len(k: int) -> int:
+            if k not in cache:
+                cache[k] = len(tokenizer.decode(ids[:k], skip_special_tokens=False))
+            return cache[k]
+
+        if dec_len(n) < char_pos:
+            return n
+        lo, hi = 0, n
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if dec_len(mid) >= char_pos:
+                hi = mid
+            else:
+                lo = mid + 1
+        return lo
 
     # 3) 逐区间标 source；区间外 = control
     seg_label = {}

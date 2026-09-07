@@ -13,8 +13,19 @@ def run_dump(tokenizer_or_model: str, revision: str, out_dir: Path, meta: dict) 
     (out_dir / "special_tokens_map.json").write_text(
         json.dumps(tok.special_tokens_map, ensure_ascii=False, indent=2), encoding="utf-8")
     added = {}
-    for tid, t in tok.added_tokens_decoder.items():
-        added[str(tid)] = str(t)
+    try:
+        added_dec = tok.added_tokens_decoder
+        if callable(added_dec):  # transformers v5 部分 tokenizer 暴露为方法
+            added_dec = added_dec()
+        for tid, t in added_dec.items():
+            added[str(tid)] = str(t)
+    except Exception as exc:
+        # MistralCommonBackend 不实现 added_tokens_decoder → 用 get_added_vocab 反推
+        try:
+            added = {str(v): k for k, v in tok.get_added_vocab().items()}
+            added["_fallback"] = "get_added_vocab"
+        except Exception as exc2:
+            added = {"_unavailable": f"{exc!r}; {exc2!r}"}
     (out_dir / "added_tokens_decoder.json").write_text(
         json.dumps(added, ensure_ascii=False, indent=2), encoding="utf-8")
     (out_dir / "revisions.json").write_text(

@@ -110,12 +110,21 @@ def main(argv=None):
                                    ensure_ascii=False, indent=2), encoding="utf-8")
                     # RQ3 control-id 集：模板 surface 里的 added/special token ids
                     # （Qwen3.5 的 <|im_start|> 是普通 added token，不在 all_special_ids
-                    #   内；普通词 token 如 "system"/"\n" 不算 control）
-                    added_vals = set(be.get_added_vocab().values())
+                    #   内；普通词 token 如 "system"/"\n" 不算 control。
+                    #   MistralCommonBackend 无 get_added_vocab → 退化为 special_ids，
+                    #   其 control tokens([INST]=3 等)已在 all_special_ids(0..999) 内）
+                    try:
+                        added_vals = set(be.get_added_vocab().values())
+                    except Exception:
+                        added_vals = set()
                     control_ids = set(be.special_ids())
                     for v in bnd.values():
-                        control_ids.update(i for i in v["token_ids"]
-                                           if i in added_vals)
+                        if added_vals:
+                            control_ids.update(i for i in v["token_ids"]
+                                               if i in added_vals)
+                        else:
+                            control_ids.update(i for i in v["token_ids"]
+                                               if i in control_ids)
                     # 对 E0 固定消息 content 做 collision 检测
                     col = [check_collision(be.tokenizer, m.get("content") or "",
                                            control_ids) for m in E0_MESSAGES]
