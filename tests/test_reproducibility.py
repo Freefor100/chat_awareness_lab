@@ -24,3 +24,16 @@ def test_toy_apply_no_double_bos_after_manual_tokenize(tmp_path):
     s = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
     ids2 = tok(s, add_special_tokens=False)["input_ids"]
     assert ids1 == ids2
+
+
+# ---- 采样确定性（同 seed 同 token 序列）----
+def test_sampling_same_seed_same_tokens():
+    import torch
+    from src.manual_decode import _sample_token
+    torch.manual_seed(42)
+    ids = [_sample_token(torch.tensor([0.1, 0.2, 0.7]), temperature=0.7, top_p=0.9)
+           for _ in range(200)]
+    torch.manual_seed(42)
+    ids2 = [_sample_token(torch.tensor([0.1, 0.2, 0.7]), temperature=0.7, top_p=0.9)
+            for _ in range(200)]
+    assert ids == ids2
