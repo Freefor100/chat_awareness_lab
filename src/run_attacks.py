@@ -152,6 +152,25 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
     eff_modes = [m for m in modes
                  if (m.startswith("standard") and can_std)
                  or (m.startswith("nostop") and can_ns)]
+    # 正式组节流（设备 4GB 限制）：env CHATLAB_SAMPLING_SUBSET / CHATLAB_NOSTOP_SUBSET
+    # 限定采样 / no-stop 轨只作用于代表性子集；其余攻击保持 greedy standard。
+    sampling_subset = {x.strip() for x in
+                       os.environ.get("CHATLAB_SAMPLING_SUBSET", "*").split(",")}
+    nostop_subset = {x.strip() for x in
+                     os.environ.get("CHATLAB_NOSTOP_SUBSET", "*").split(",")}
+    if "none" in sampling_subset:
+        sampling_subset = set()
+    if "none" in nostop_subset:
+        nostop_subset = set()
+    seeds = gen_cfg.get("formal", {}).get("sampling_seeds", [1, 2, 3])
+
+    def atk_modes(atk: str) -> list[str]:
+        m = eff_modes
+        if "*" not in sampling_subset and atk not in sampling_subset:
+            m = [x for x in m if "sampling" not in x]
+        if "*" not in nostop_subset and atk not in nostop_subset:
+            m = [x for x in m if not x.startswith("nostop")]
+        return m
 
     surfaces = None
     surface_ids = {}
@@ -172,9 +191,21 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
     for exp in experiments:
         for atk in _exp_attacks(exp):
             out = run_dir / "cases" / f"{exp}_{atk}.jsonl"
+            # 采样轨 × seeds 展开（"standard_sampling" → standard_sampling:1..3）
+            modes_atk = []
+            for m in atk_modes(atk):
+                if "sampling" in m and ":" not in m:
+                    modes_atk += [f"{m}:{s}" for s in seeds]
+                else:
+                    modes_atk.append(m)
+            if out.exists():
+                # 断点续跑：已完成单元格直接跳过（不重复计数）
+                stats["per_exp"][f"{exp}:{atk}"] = {"skipped_existing": True,
+                                                    "modes": modes_atk}
+                continue
             if dry_run:
                 stats["per_exp"][f"{exp}:{atk}"] = {"planned": n_canaries,
-                                                    "modes": eff_modes}
+                                                    "modes": modes_atk}
                 continue
             n_written = 0
             for i in range(n_canaries):
@@ -190,7 +221,7 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
                                              case["attack_meta"]["instr"])
                     if e4_ref is None:
                         continue  # 无真实 tokenizer 的 backend：跳过并计数
-                for mode in eff_modes:
+                for mode in modes_atk:
                     mn = gen_cfg["reproduction_max_new_tokens"] \
                         if exp in ("E1", "E2", "E4") else gen_cfg["max_new_tokens"]
                     if os.environ.get("CHATLAB_MAX_NEW_TOKENS"):

@@ -12,8 +12,8 @@ def run_case_generation(backend, messages, gen_cfg: dict, mode: str,
                         max_new_tokens: int | None = None) -> dict:
     """按 mode 跑一次生成，返回记录片段。
 
-    mode ∈ {"standard_greedy", "nostop_greedy", "standard_sampling",
-             "nostop_sampling"}。
+    mode base ∈ {"standard_greedy", "nostop_greedy", "standard_sampling",
+                 "nostop_sampling"}；sampling 轨可用 "base:<seed>" 后缀指定 seed。
     input_ids: 预注入 ids（A10 token attack 由 run_attacks 提供）；
     为空时用 messages 经 backend.ids_from_messages 编码。
     """
@@ -22,6 +22,11 @@ def run_case_generation(backend, messages, gen_cfg: dict, mode: str,
     else:
         ids = list(input_ids)
     mn = max_new_tokens or gen_cfg["max_new_tokens"]
+
+    seed = 0
+    if ":" in mode:
+        mode, seed_str = mode.split(":", 1)
+        seed = int(seed_str)
 
     if mode == "standard_greedy":
         r = backend.generate_standard(ids, max_new_tokens=mn, temperature=0.0,
@@ -33,12 +38,12 @@ def run_case_generation(backend, messages, gen_cfg: dict, mode: str,
         m = "nostop_greedy"
     elif mode == "standard_sampling":
         r = backend.generate_standard(ids, max_new_tokens=mn, temperature=0.7,
-                                      top_p=0.9, seed=1, do_sample=True)
-        m = "standard_sampling"
+                                      top_p=0.9, seed=seed, do_sample=True)
+        m = f"standard_sampling:{seed}"
     elif mode == "nostop_sampling":
         r = manual_generate(backend, ids, max_new_tokens=mn, temperature=0.7,
-                            top_p=0.9, seed=1, do_sample=True)
-        m = "nostop_sampling"
+                            top_p=0.9, seed=seed, do_sample=True)
+        m = f"nostop_sampling:{seed}"
     else:
         raise ValueError(mode)
 
