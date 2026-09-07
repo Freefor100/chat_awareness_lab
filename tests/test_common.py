@@ -35,3 +35,25 @@ def test_canary_strings_match_design_doc():
     assert "BLOCKED" in cons["e5_system"]
     assert "{marker}" in cons["e5_system"]  # SYS_CANARY_<hex> 运行时由 gen_marker 注入 {marker}
     assert "SECRET_SYSTEM_NONCE" in cons["e7_system"]
+
+# 追加到 tests/test_common.py
+import json, hashlib, time, random
+from src.common import now_tag, make_run_dir, append_jsonl, read_jsonl, sha256_bytes
+
+def test_now_tag_format():
+    import re
+    assert re.fullmatch(r"\d{8}_\d{6}", now_tag())
+
+def test_make_run_dir_creates_layout(tmp_path):
+    d = make_run_dir(tmp_path, "tag1")
+    assert (d / "template").is_dir() and (d / "cases").is_dir()
+
+def test_jsonl_roundtrip(tmp_path):
+    p = tmp_path / "o.jsonl"
+    append_jsonl(p, {"a": 1})
+    append_jsonl(p, {"a": 2})
+    rows = read_jsonl(p)
+    assert [r["a"] for r in rows] == [1, 2]
+
+def test_sha256_bytes():
+    assert sha256_bytes(b"abc") == hashlib.sha256(b"abc").hexdigest()
