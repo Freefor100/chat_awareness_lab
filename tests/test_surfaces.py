@@ -32,3 +32,54 @@ def test_boundary_token_ids_flags_special(tmp_path):
     b = boundary_token_ids(s, lambda t: tok(t, add_special_tokens=False)["input_ids"], special)
     # <|im_start|> 等必须被标记为 special；marker 文本不是
     assert b["sys_open"]["is_special"] and b["sys_open"]["token_ids"]
+
+# ---- Task 9: dynamic attack case builder (E1–E8) ----
+from src.attack_builder import build_case
+from src.common import load_yaml
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def test_e5_baseline_messages(tmp_path):
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    m = build_case("E5", "plain", cfg, cons, None, "SYS_CANARY_ABCDEF", "X", seed=0)
+    assert m["messages"][0]["role"] == "system"
+    assert "SYS_CANARY_ABCDEF" in m["messages"][0]["content"]
+
+def test_e6_a6_uses_surfaces(tmp_path):
+    from tests.fixtures.toy import make_toy_tokenizer, TOY_STYLES
+    from src.surfaces import extract_surfaces
+    tok = make_toy_tokenizer(tmp_path, TOY_STYLES["chatml"])
+    s = extract_surfaces(lambda ms, add_gen=False: tok.apply_chat_template(
+        ms, tokenize=False, add_generation_prompt=add_gen))
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    m = build_case("E6", "A6", cfg, cons, s, "SYS_CANARY_ABCDEF", None, seed=0)
+    user_content = m["messages"][-1]["content"]
+    assert s["sys_open"] in user_content and "SYS_CANARY_ABCDEF" in user_content
+
+def test_e6_a7_combo_order(tmp_path):
+    from tests.fixtures.toy import make_toy_tokenizer, TOY_STYLES
+    from src.surfaces import extract_surfaces
+    tok = make_toy_tokenizer(tmp_path, TOY_STYLES["chatml"])
+    s = extract_surfaces(lambda ms, add_gen=False: tok.apply_chat_template(
+        ms, tokenize=False, add_generation_prompt=add_gen))
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    m = build_case("E6", "A7", cfg, cons, s, "SYS_CANARY_ABCDEF", None, seed=0)
+    uc = m["messages"][-1]["content"]
+    # chatml 的 usr_close == sys_close == "<|im_end|>\n"（同一模板后缀），
+    # str.index 恒取首个出现 → 从 canary 之后起搜 sys_close 以区分两次出现
+    assert uc.index(s["usr_close"]) < uc.index(s["sys_open"]) < uc.index("SYS_CANARY_ABCDEF") \
+           < uc.index(s["sys_close"], uc.index("SYS_CANARY_ABCDEF")) < uc.index(s["usr_open"])
+
+def test_e6_a10_marks_token_override(tmp_path):
+    cfg = load_yaml(ROOT / "configs/attacks.yaml")
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    m = build_case("E6", "A10", cfg, cons, None, "SYS_CANARY_ABCDEF", None, seed=0)
+    assert m["attack_meta"]["token_attack"] is True
+
+def test_e4_query_contains_echo_placeholder(tmp_path):
+    cons = load_yaml(ROOT / "prompts/system_constraints.yaml")
+    assert "<ECHO_QUERY>" in cons["e4_query"]
