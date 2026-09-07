@@ -89,7 +89,8 @@ def main(argv=None):
         if args.stage == "e0":
             from src.dump_template import run_dump
             from src.render_context import run_render
-            from src.inspect_injection_tokens import check_collision
+            from src.inspect_injection_tokens import check_collision, \
+                candidate_attack_texts
             from src.surfaces import extract_surfaces, boundary_token_ids
             td = run_dir / "template"
             run_dump(cfg["id"], rev, td,
@@ -99,20 +100,33 @@ def main(argv=None):
             if be.loaded:
                 try:
                     s = extract_surfaces(
-                        lambda ms: be.apply_template(ms, tokenize=False,
-                                                     add_generation_prompt=False))
+                        lambda ms, add_gen=False: be.apply_template(
+                            ms, tokenize=False, add_generation_prompt=add_gen))
                     bnd = boundary_token_ids(
                         s, lambda t: be.encode(t, add_special_tokens=False),
                         be.special_ids())
                     (td / "control_surfaces.json").write_text(
                         json.dumps({"surfaces": s, "boundary": bnd},
                                    ensure_ascii=False, indent=2), encoding="utf-8")
-                    # RQ3：对 E0 固定消息中每个 content 做 collision 检测
+                    # RQ3 control-id 集：模板 surface 里的 added/special token ids
+                    # （Qwen3.5 的 <|im_start|> 是普通 added token，不在 all_special_ids
+                    #   内；普通词 token 如 "system"/"\n" 不算 control）
+                    added_vals = set(be.get_added_vocab().values())
+                    control_ids = set(be.special_ids())
+                    for v in bnd.values():
+                        control_ids.update(i for i in v["token_ids"]
+                                           if i in added_vals)
+                    # 对 E0 固定消息 content 做 collision 检测
                     col = [check_collision(be.tokenizer, m.get("content") or "",
-                                           be.special_ids()) for m in E0_MESSAGES]
+                                           control_ids) for m in E0_MESSAGES]
+                    # E3：官方 surface 候选注入串的 RQ3 检测（RQ3 报告本体）
+                    cands = candidate_attack_texts(s, "SYS_CANARY_1A2B3C")
+                    cand_res = {name: check_collision(be.tokenizer, text,
+                                                      control_ids)
+                                for name, text in cands.items()}
                     (td / "collisions.json").write_text(
-                        json.dumps(col, ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+                        json.dumps({"e0_messages": col, "candidates": cand_res},
+                                   ensure_ascii=False, indent=2), encoding="utf-8")
                 except Exception as exc:
                     print(f"[e0-warn] {cfg['key']} surfaces/collision: {exc!r}")
             append_jsonl(run_dir / "metrics.json",

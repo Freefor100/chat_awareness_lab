@@ -93,8 +93,8 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
     surface_ids = {}
     try:
         surfaces = extract_surfaces(
-            lambda ms: backend.apply_template(ms, add_generation_prompt=False,
-                                              tokenize=False))
+            lambda ms, add_gen=False: backend.apply_template(
+                ms, add_generation_prompt=add_gen, tokenize=False))
         if hasattr(backend, "encode"):
             special = backend.special_ids() if hasattr(backend, "special_ids") else set()
             surface_ids = boundary_token_ids(

@@ -33,45 +33,57 @@ def _strip_known(gap: str, known_open: str | None, side: str) -> tuple[str, str 
 
 
 def extract_surfaces(render: Callable[[list[dict]], str]) -> dict:
-    ms, mu, ma = _marker("S"), _marker("U"), _marker("A")
-    r_sys = render([{"role": "system", "content": ms}])
+    """探针渲染提取控制 surface。
+
+    探针全部以 user 消息收尾——部分官方模板（如 Qwen3.5）要求最后一条是
+    user，assistant-only / system-only 探针会抛 TemplateError。
+    asst_open 由 generation-prompt 前后渲染的差值得出：
+    tail_gen = 最后 user content 之后(含 generation prompt)的文本，
+    tail_nogen = 同样位置(不含 generation prompt)的文本，
+    asst_open = tail_gen 去掉 tail_nogen 前缀后的余量。
+    """
+    ms, mu = _marker("S"), _marker("U")
     r_usr = render([{"role": "user", "content": mu}])
-    r_asst = render([{"role": "assistant", "content": ma}])
+    r_usr_gen = render([{"role": "user", "content": mu}], add_gen=True)
     r_su = render([{"role": "system", "content": ms}, {"role": "user", "content": mu}])
-    r_ua = render([{"role": "user", "content": mu}, {"role": "assistant", "content": ma}])
-    r_su_gen = render([{"role": "system", "content": ms}, {"role": "user", "content": mu}],
-                      add_gen=True)
 
-    sys_open = _cut(r_sys, ms, "before")
     usr_open = _cut(r_usr, mu, "before")
-    asst_open = _cut(r_asst, ma, "before")
-
+    sys_open = _cut(r_su, ms, "before")
     gap1 = _cut(r_su, ms, "after")
     if gap1 is not None:
         gap1 = _cut(gap1, mu, "before")
-    gap2 = _cut(r_ua, mu, "after")
-    if gap2 is not None:
-        gap2 = _cut(gap2, ma, "before")
-    tail = _cut(r_su_gen, mu, "after")
+    tail_nogen = _cut(r_usr, mu, "after")
+    tail_gen = _cut(r_usr_gen, mu, "after")
 
+    # usr_close = 无 generation prompt 时最后一个 user content 之后的文本
+    usr_close = tail_nogen
+    # asst_open = 加 generation prompt 后多出来的部分
+    asst_open = None
+    if tail_nogen is not None and tail_gen is not None:
+        if tail_gen.startswith(tail_nogen):
+            asst_open = tail_gen[len(tail_nogen):]
+        elif tail_gen == "":
+            asst_open = ""
+        else:
+            asst_open = None
+    # sys_close = gap1 去掉尾部 usr_open（sys_close 与 usr_open 相邻）
     sys_close, _, _ = _strip_known(gap1 or "", usr_open, "suffix")
-    usr_close, _, _ = _strip_known(gap2 or "", asst_open, "suffix")
 
     skipped = []
     if sys_open is None: skipped.append("sys_open")
     if usr_open is None: skipped.append("usr_open")
     if asst_open is None: skipped.append("asst_open")
     if gap1 is None: skipped.append("gap1")
-    if gap2 is None: skipped.append("gap2")
-    if tail is None: skipped.append("tail")
+    if usr_close is None: skipped.append("usr_close")
+    if tail_gen is None: skipped.append("tail")
 
     return {
         "sys_open": sys_open, "sys_close": sys_close or None,
         "usr_open": usr_open, "usr_close": usr_close or None,
-        "asst_open": asst_open, "head": _cut(r_sys, ms, "before"),
-        "tail": tail,
-        "render_log": {"sys": r_sys, "user": r_usr, "assistant": r_asst,
-                       "sys_user": r_su, "user_assistant": r_ua, "sys_user_gen": r_su_gen},
+        "asst_open": asst_open, "head": sys_open,
+        "tail": tail_gen,
+        "render_log": {"user": r_usr, "user_gen": r_usr_gen,
+                       "sys_user": r_su},
         "skipped": skipped,
     }
 
