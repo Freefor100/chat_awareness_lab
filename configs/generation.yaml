@@ -1,0 +1,18 @@
+max_new_tokens: 512
+reproduction_max_new_tokens: 1024   # E1/E2/E4 复述组
+smoke:
+  n_canaries: 20
+formal:
+  n_canaries: 100
+  sampling_seeds: [1, 2, 3]
+greedy:
+  temperature: 0
+  top_p: 1.0
+sampling:
+  temperature: 0.7
+  top_p: 0.9
+modes:
+  - standard_greedy
+  - nostop_greedy
+  - standard_sampling      # formal 阶段启用
+  - nostop_sampling        # formal 阶段启用
