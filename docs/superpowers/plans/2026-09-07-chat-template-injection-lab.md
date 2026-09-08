@@ -1,33 +1,36 @@
-# Chat Template / Input 复述 / Prompt Injection 实验库实施计划
+# 对话模板与提示注入实验库:实施计划(历史执行档案)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+## 这篇文档是什么
 
-**Goal:** 按设计书 v1.0 实现一个"messages → 官方 chat template → token IDs → 本地模型输出"全链路可观测的实验库，跑通 E0–E8，产出带 ASR/CI 的统计报告。
+这是 2026-09-07 到 09-08 期间,把根目录的设计书(`chat_template_prompt_injection_experiment_design.md`,v1.1)落地成代码与实验的执行计划原文。它按任务(Task 1 到 Task 23)拆分了每一步:先建什么文件、每个文件的职责、要写哪些测试、用什么命令验证、什么时候提交。计划里绝大部分代码块与实际提交到 `src/` 的代码一一对应,因此这份文档同时是**实施过程的完整档案**。
 
-**Architecture:** 纯 Hugging Face Transformers/Processor 可观测链路（禁止先上 LangChain）；程序按位置映射标注 token 来源（source_guess），绝不使用模型自述；standard generation 与 manual no-stop decoding 双轨并行；攻击字符串由实测模板 surface 动态生成、零硬编码。模型加载走 `bf16 GPU → bitsandbytes int4 → torchao int4 → CPU` 链并记录实际精度。
+对今天的使用者,建议按下面的顺序读,不必逐字通读本档案:
 
-**Tech Stack:** Python 3.13, torch(CUDA), transformers, accelerate, bitsandbytes, torchao, huggingface_hub, mistral-common(兜底), numpy, pyyaml, pytest。
+1. 先读根目录设计书,理解实验想回答什么问题、结论边界在哪里;
+2. 再读 `README.md`,它说明仓库结构、运行命令、术语含义,并附设计书第十三节验收标准与代码文件的对照表;
+3. 实验结论看 `reports/phase1_manifest.md`(模板层结果)与 `reports/formal_summary.md`(行为实验结果);
+4. 只有当你需要追查"某个模块当初为什么这么设计、被评审揪出过什么问题、执行中改过什么"时,才需要回到本档案按任务号检索。
 
-**Spec:** `chat_template_prompt_injection_experiment_design.md`（仓库根，v1.0；副本在 `docs/superpowers/specs/2026-09-07-chat-template-injection-lab-design.md`）
+## 给执行者的说明(原始约束,保留备查)
 
-## Global Constraints
+以下约束在实现全程生效,现仍与代码行为一致;其中提到的英文术语在 README 的术语对照一节有中文解释。
 
-1. 可观测链路唯一可信：`messages → 官方 chat template 渲染 → token IDs → 模型输出`；不允许用模型自述代替观测（设计书 §核心原则）。
-2. `source_guess` 必须由程序构造/位置映射生成（§5.2）。
-3. 官方模板 surface 攻击字符串（E3/A6/A7）必须从当前模型的 template/tokenizer 配置动态生成，禁止硬编码任何模型的固定字符串（§6 E3）。
-4. 评估 decode 一律 `skip_special_tokens=False`（§9.2）。
-5. 用 `apply_chat_template(tokenize=True)` 优先；禁止先 `tokenize=False` 再 tokenize 导致重复加 BOS（§9.3）。
-6. 所有运行记录 revision/commit、template SHA-256、量化类型、dtype、seed、环境快照（§9.1–9.7、§12）。
-7. 每个 template-reproduction 实验（E1/E2/E4）必须同时报告 standard generation 与 manual no-stop decoding（§5.4）。
-8. 攻击只含 synthetic canary（`SYS_CANARY_<hex>` / `SECRET_SYSTEM_NONCE` 128-bit），无现实危险行为（§4 原则、§7）。
-9. 结论形式受限：只允许"在模型 X、revision Y、官方模板 Z 下……"式结论（§15）。
-10. 支持 thinking 的模型必须固定 thinking 模式并记录（§9.5）。
-11. 报告必须含 ASR 与样本数 N、95% bootstrap CI；禁止单例截图式结论（§13.12、§8）。
-12. 测试不得依赖模型权重下载：单元测试全部使用仓库内 toy tokenizer/template fixtures；真实模型只出现在带 `integration` marker 的测试中。
+1. 唯一可信的观测链路是 messages(结构化消息)→ 官方对话模板渲染 → token 编号序列 → 模型输出,每一步都要留下中间文件;不允许拿模型自述代替程序观测(设计书"核心原则")。
+2. 逐 token 表格里的来源标注列必须由程序按位置映射生成,不能让模型自己判断(设计书 §5.2)。
+3. 官方模板表面字符串构成的攻击串(E3/A6/A7)必须从当前模型的模板与分词器配置动态生成,禁止把任何模型的固定字符串写死在代码里(§6 E3)。
+4. 评估时一律用不跳过特殊 token 的解码(§9.2)。
+5. 优先用一步到位的 `apply_chat_template(tokenize=True)`;不允许先渲染成文本再分词从而二次添加 BOS 等特殊 token(§9.3)。
+6. 所有运行记录模型版本、模板 SHA-256、量化方式、随机种子与环境快照(§9.1–9.7、§12)。
+7. 模板复述类实验(E1/E2/E4)必须同时报告标准生成与不停手手动解码两种结果(§5.4)。
+8. 攻击内容只含人造金丝雀与一次性随机数,不触碰任何现实危险行为(§4、§7)。
+9. 结论只允许"在模型 X、版本 Y、官方模板 Z 下……"这种限定形式(§15)。
+10. 支持思考模式的模型必须固定模式并记录(§9.5)。
+11. 报告必须给出成功率、样本数 N 与 95% 自助法置信区间,禁止用单个成功案例下结论(§13.12、§8)。
+12. 单元测试不得依赖模型权重下载:一律用仓库内的玩具分词器与模板夹具;真实模型只出现在带 integration 标记的测试里。
 
 ---
 
-## 文件结构
+## 任务清单与文件结构
 
 ```
 chat_template_awareness_test/            ← 仓库根（已含设计书 md）
