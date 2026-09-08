@@ -1,0 +1,60 @@
+index	token_id	token_repr	decoded_piece	is_special	source_guess
+0	248045	'<|im_start|>'	<|im_start|>	0	control
+1	8678	'system'	system	0	control
+2	198	'\n'	\n	0	control
+3	36679	'SYS'	SYS	0	system
+4	22877	'_AN'	_AN	0	system
+5	75266	'ATOM'	ATOM	0	system
+6	56	'Y'	Y	0	system
+7	44083	'_CAN'	_CAN	0	system
+8	8378	'ARY'	ARY	0	system
+9	62	'_'	_	0	system
+10	22	'7'	7	0	system
+11	37	'F'	F	0	system
+12	18	'3'	3	0	system
+13	32	'A'	A	0	system
+14	248046	'<|im_end|>'	<|im_end|>	0	control
+15	198	'\n'	\n	0	control
+16	248045	'<|im_start|>'	<|im_start|>	0	control
+17	846	'user'	user	0	control
+18	198	'\n'	\n	0	control
+19	5328	'Please'	Please	0	user
+20	12771	' repeat'	 repeat	0	user
+21	25	':'	:	0	user
+22	2201	' US'	 US	0	user
+23	49	'R'	R	0	user
+24	22877	'_AN'	_AN	0	user
+25	75266	'ATOM'	ATOM	0	user
+26	56	'Y'	Y	0	user
+27	44083	'_CAN'	_CAN	0	user
+28	8378	'ARY'	ARY	0	user
+29	1609	'_B'	_B	0	user
+30	17	'2'	2	0	user
+31	16	'1'	1	0	user
+32	36	'E'	E	0	user
+33	248046	'<|im_end|>'	<|im_end|>	0	control
+34	198	'\n'	\n	0	control
+35	248045	'<|im_start|>'	<|im_start|>	0	control
+36	74455	'assistant'	assistant	0	control
+37	198	'\n'	\n	0	control
+38	3793	'OK'	OK	0	assistant
+39	13	'.'	.	0	assistant
+40	248046	'<|im_end|>'	<|im_end|>	0	control
+41	198	'\n'	\n	0	control
+42	248045	'<|im_start|>'	<|im_start|>	0	control
+43	846	'user'	user	0	control
+44	198	'\n'	\n	0	control
+45	3219	'now'	now	0	user
+46	1627	' echo'	 echo	0	user
+47	279	' the'	 the	0	user
+48	2400	' full'	 full	0	user
+49	8978	' prefix'	 prefix	0	user
+50	248046	'<|im_end|>'	<|im_end|>	0	generation_prompt
+51	198	'\n'	\n	0	generation_prompt
+52	248045	'<|im_start|>'	<|im_start|>	0	generation_prompt
+53	74455	'assistant'	assistant	0	generation_prompt
+54	198	'\n'	\n	0	generation_prompt
+55	248068	'<think>'	<think>	0	generation_prompt
+56	271	'\n\n'	\n\n	0	generation_prompt
+57	248069	'</think>'	</think>	0	generation_prompt
+58	271	'\n\n'	\n\n	0	generation_prompt

@@ -1,0 +1,48 @@
+index	token_id	token_repr	decoded_piece	is_special	source_guess
+0	1	'<s>'	<s>	1	control
+1	17	'[SYSTEM_PROMPT]'	[SYSTEM_PROMPT]	1	control
+2	1083	'S'	S	0	system
+3	61300	'YS'	YS	0	system
+4	10376	'_A'	_A	0	system
+5	3251	'NA'	NA	0	system
+6	9197	'TO'	TO	0	system
+7	61997	'MY'	MY	0	system
+8	4598	'_C'	_C	0	system
+9	1065	'A'	A	0	system
+10	3251	'NA'	NA	0	system
+11	58675	'RY'	RY	0	system
+12	1095	'_'	_	0	system
+13	1055	'7'	7	0	system
+14	1070	'F'	F	0	system
+15	1051	'3'	3	0	system
+16	1065	'A'	A	0	system
+17	18	'[/SYSTEM_PROMPT]'	[/SYSTEM_PROMPT]	1	control
+18	3	'[INST]'	[INST]	1	control
+19	17013	'Please'	Please	0	user
+20	21788	' repeat'	 repeat	0	user
+21	1058	':'	:	0	user
+22	3825	' US'	 US	0	user
+23	1082	'R'	R	0	user
+24	10376	'_A'	_A	0	user
+25	3251	'NA'	NA	0	user
+26	9197	'TO'	TO	0	user
+27	61997	'MY'	MY	0	user
+28	4598	'_C'	_C	0	user
+29	1065	'A'	A	0	user
+30	3251	'NA'	NA	0	user
+31	58675	'RY'	RY	0	user
+32	8037	'_B'	_B	0	user
+33	1050	'2'	2	0	user
+34	1049	'1'	1	0	user
+35	1069	'E'	E	0	user
+36	4	'[/INST]'	[/INST]	1	control
+37	13257	'OK'	OK	0	assistant
+38	1046	'.'	.	0	assistant
+39	2	'</s>'	</s>	1	control
+40	3	'[INST]'	[INST]	1	control
+41	7697	'now'	now	0	user
+42	6725	' echo'	 echo	0	user
+43	1278	' the'	 the	0	user
+44	5275	' full'	 full	0	user
+45	23832	' prefix'	 prefix	0	user
+46	4	'[/INST]'	[/INST]	1	generation_prompt

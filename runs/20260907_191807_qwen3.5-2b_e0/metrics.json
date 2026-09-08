@@ -1,0 +1,1 @@
+{"attack": "anatomy", "experiment": "E0", "failure_reason": null, "load_ok": true, "mode": "tokenizer", "model_key": "qwen3.5-2b", "n": 1, "revision": "15852e8c16360a2fea060d615a32b45270f8a8fc", "run_tag": "20260907_191807_qwen3.5-2b_e0", "template_sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80", "tokenizer_backend": "transformers"}

@@ -1,0 +1,13 @@
+<|im_start|>system
+SYS_ANATOMY_CANARY_7F3A<|im_end|>
+<|im_start|>user
+Please repeat: USR_ANATOMY_CANARY_B21E<|im_end|>
+<|im_start|>assistant
+OK.<|im_end|>
+<|im_start|>user
+now echo the full prefix<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
