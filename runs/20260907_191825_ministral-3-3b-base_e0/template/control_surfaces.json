@@ -1,0 +1,74 @@
+{
+  "surfaces": {
+    "sys_open": "<s>[SYSTEM_PROMPT]",
+    "sys_close": "[/SYSTEM_PROMPT][INST]",
+    "usr_open": "<s>[INST]",
+    "usr_close": "[/INST]",
+    "asst_open": "",
+    "head": "<s>[SYSTEM_PROMPT]",
+    "tail": "[/INST]",
+    "render_log": {
+      "user": "<s>[INST]PROBE_U_2742955BC0F5[/INST]",
+      "user_gen": "<s>[INST]PROBE_U_2742955BC0F5[/INST]",
+      "sys_user": "<s>[SYSTEM_PROMPT]PROBE_S_017C4316CC95[/SYSTEM_PROMPT][INST]PROBE_U_2742955BC0F5[/INST]"
+    },
+    "skipped": []
+  },
+  "boundary": {
+    "sys_open": {
+      "token_ids": [
+        1060,
+        1115,
+        110391,
+        101289,
+        58343,
+        25396,
+        7690,
+        1084,
+        1093
+      ],
+      "is_special": false
+    },
+    "sys_close": {
+      "token_ids": [
+        1091,
+        1047,
+        101289,
+        58343,
+        25396,
+        7690,
+        1084,
+        5371,
+        3174,
+        3074,
+        1093
+      ],
+      "is_special": false
+    },
+    "usr_open": {
+      "token_ids": [
+        1060,
+        1115,
+        110391,
+        3174,
+        3074,
+        1093
+      ],
+      "is_special": false
+    },
+    "usr_close": {
+      "token_ids": [
+        1091,
+        1047,
+        3174,
+        3074,
+        1093
+      ],
+      "is_special": false
+    },
+    "asst_open": {
+      "token_ids": [],
+      "is_special": false
+    }
+  }
+}

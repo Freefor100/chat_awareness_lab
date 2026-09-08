@@ -1,0 +1,61 @@
+{
+  "surfaces": {
+    "sys_open": "<|im_start|>system\n",
+    "sys_close": "<|im_end|>\n",
+    "usr_open": "<|im_start|>user\n",
+    "usr_close": "<|im_end|>\n",
+    "asst_open": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "head": "<|im_start|>system\n",
+    "tail": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+    "render_log": {
+      "user": "<|im_start|>user\nPROBE_U_25A3F0E66CA5<|im_end|>\n",
+      "user_gen": "<|im_start|>user\nPROBE_U_25A3F0E66CA5<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "sys_user": "<|im_start|>system\nPROBE_S_FF71FC2070AA<|im_end|>\n<|im_start|>user\nPROBE_U_25A3F0E66CA5<|im_end|>\n"
+    },
+    "skipped": []
+  },
+  "boundary": {
+    "sys_open": {
+      "token_ids": [
+        248045,
+        8678,
+        198
+      ],
+      "is_special": false
+    },
+    "sys_close": {
+      "token_ids": [
+        248046,
+        198
+      ],
+      "is_special": false
+    },
+    "usr_open": {
+      "token_ids": [
+        248045,
+        846,
+        198
+      ],
+      "is_special": false
+    },
+    "usr_close": {
+      "token_ids": [
+        248046,
+        198
+      ],
+      "is_special": false
+    },
+    "asst_open": {
+      "token_ids": [
+        248045,
+        74455,
+        198,
+        248068,
+        271,
+        248069,
+        271
+      ],
+      "is_special": false
+    }
+  }
+}

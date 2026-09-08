@@ -1,0 +1,14 @@
+{
+  "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:16:10) [GCC 11.2.0]",
+  "torch": "2.14.0+cu130",
+  "transformers": "5.16.1",
+  "accelerate": "1.14.0",
+  "huggingface_hub": "1.30.0",
+  "torch_cuda_available": true,
+  "gpu": [
+    "NVIDIA GeForce RTX 3050 Laptop GPU"
+  ],
+  "nvidia_smi": [
+    "NVIDIA GeForce RTX 3050 Laptop GPU, 4096 MiB, 3395 MiB"
+  ]
+}
