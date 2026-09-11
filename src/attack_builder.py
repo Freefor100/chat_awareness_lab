@@ -32,9 +32,12 @@ def build_case(exp: str, attack_key: str, attacks_cfg: dict, constraints: dict,
             raise ValueError(f"E2 unknown attack_key {attack_key}")
         tpl = attacks_cfg["copy_baselines"][tpl_key]
         content = _fill(tpl, canary, nonce, surfaces)
+        # copy_ref = 要求模型逐字复制的那一段原文（不含提示语），评分以它为准。
+        # 取提示语之后的全部行；提示语是首行 "Copy ... Do not modify it."
+        copy_ref = "\n".join(content.splitlines()[1:]).strip()
         return {"messages": [{"role": "user", "content": content}],
                 "attack_meta": {"experiment": exp, "attack": attack_key,
-                                "canary": canary},
+                                "canary": canary, "copy_ref": copy_ref},
                 "token_override": None}
     if exp == "E4":
         q = constraints["e4_query"].replace("{marker}", canary)
