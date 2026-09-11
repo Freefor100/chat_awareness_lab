@@ -103,6 +103,22 @@ curl -s http://127.0.0.1:18080/completion \
 2. **编号完全一致。** 同一条提示,Hugging Face 分词器与 llama.cpp 给出的 109 个编号逐位相同,包括手写的 `<|im_start|>`(248045)与 `<|im_end|>`(248046)。llama.cpp 不会把你写的标记"消毒"掉。
 3. **输出一致。** 同精度、同提示,两边都给出 `BLOCKED`。
 
+上面这张表不是手抄的,可以用仓库里的脚本复现:
+
+```bash
+# 只比对编号(不加载权重,几秒钟)
+python tools/compare_llamacpp.py --gguf ~/models/gguf/Qwen3.5-0.8B-Q4_0.gguf
+
+# 先在另一个终端起服务,再加 --port 测速度并核对 tokens_evaluated
+llama-server -m 模型.gguf -ngl 99 -c 512 -b 256 -ub 256 --port 18080
+python tools/compare_llamacpp.py --gguf 模型.gguf --port 18080
+
+# 换成自己写的提示
+python tools/compare_llamacpp.py --gguf 模型.gguf --prompt-file 我的提示.txt
+```
+
+脚本会把同一条提示分别送进两边的分词器,逐位比对编号,并在测速度时打印服务端报告的 `tokens_evaluated`——它必须等于你手写内容的片段数。
+
 ---
 
 ## 四、在 Windows 上跑:注意事项

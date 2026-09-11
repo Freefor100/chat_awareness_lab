@@ -129,6 +129,7 @@ python3 -m venv .venv
 | 工具 | 作用 |
 |---|---|
 | `manual_probe.py` | **手动拼装与试跑**。看模板原文(`--template`)、看正常渲染与逐段编号(`--render`)、把手写的整段提示直接喂给模型(`--raw-file`)、正常问一句做对照(`--chat`) |
+| `compare_llamacpp.py` | llama.cpp 与 Hugging Face 两条路径的比对:分词编号逐位比对、经 `llama-server` 的 `/completion` 接口测速度并核对 `tokens_evaluated`、打印生成内容。`docs/manual_llm_testing.md` 里那张对照表由它跑出 |
 | `check_flat_render.py` | 平铺式注入的设计校验:先反推用户正文该写什么,再把"真实对话"与"攻击写法"的渲染结果逐字节比对,并检查每条用例的轮次是否平级、有无空轮次;不合格就直接退出,不允许跑模型 |
 | `aggregate_metrics.py` | 按 `model_key` 精确匹配汇总全部批次,打印 ASR、合规率、复述率、复制率、E4 复述得分、E7 泄露率核对表 |
 | `run_cells.py` | 分单元格跑批,写进指定的运行目录,可中断续跑;跑完核对行数,残缺的单元格会被识别并重跑 |
