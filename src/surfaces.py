@@ -5,7 +5,8 @@
 import secrets
 from typing import Callable
 
-_SURFACE_KEYS = ("sys_open", "sys_close", "usr_open", "usr_close", "asst_open")
+_SURFACE_KEYS = ("sys_open", "sys_close", "usr_open", "usr_close", "asst_open",
+                 "asst_head", "asst_close")
 
 
 def _marker(tag: str) -> str:
@@ -42,10 +43,17 @@ def extract_surfaces(render: Callable[[list[dict]], str]) -> dict:
     tail_nogen = 同样位置(不含 generation prompt)的文本，
     asst_open = tail_gen 去掉 tail_nogen 前缀后的余量。
     """
-    ms, mu = _marker("S"), _marker("U")
+    ms, mu, mu2, ma = (_marker("S"), _marker("U"), _marker("U"), _marker("A"))
     r_usr = render([{"role": "user", "content": mu}])
     r_usr_gen = render([{"role": "user", "content": mu}], add_gen=True)
     r_su = render([{"role": "system", "content": ms}, {"role": "user", "content": mu}])
+    # assistant 轮的收尾与开头：注意探针里 assistant 消息后面必须再跟一条消息。
+    # 同一个 assistant 消息，作为"历史中间的一段"和作为"最后一条"，模板渲染结果
+    # 不一样——放在最后时模板会补一个空的 <think> 块（那是生成位置的前缀），
+    # 放在中间才是"已经说完的一轮"的真实写法。要伪造历史只能用后者。
+    r_ua = render([{"role": "user", "content": mu},
+                   {"role": "assistant", "content": ma},
+                   {"role": "user", "content": mu2}])
 
     usr_open = _cut(r_usr, mu, "before")
     sys_open = _cut(r_su, ms, "before")
@@ -68,11 +76,23 @@ def extract_surfaces(render: Callable[[list[dict]], str]) -> dict:
             asst_open = None
     # sys_close = gap1 去掉尾部 usr_open（sys_close 与 usr_open 相邻）
     sys_close, _, _ = _strip_known(gap1 or "", usr_open, "suffix")
+    # asst_close 与 asst_head = 历史里一条已经写完的 assistant 轮的收尾与开头。
+    # asst_head 与 asst_open 不是一回事：asst_open 是生成位置的前缀（多带一个空的
+    # <think> 块，模型从这里开始写）。要伪造"上一轮已经说完的话"只能用 asst_head，
+    # 用 asst_open 会在渲染结果里多出一段 <think>，和真实历史对不上。
+    asst_head = asst_close = None
+    mid = _cut(r_ua, mu, "after")     # usr_close + asst_head + ma + asst_close + usr_open + mu2
+    if mid and ma in mid:
+        before_ma, after_ma = mid.split(ma, 1)
+        asst_head, _, _ = _strip_known(before_ma, usr_close, "prefix")
+        asst_close, _, _ = _strip_known(after_ma, usr_open, "suffix")
 
     skipped = []
     if sys_open is None: skipped.append("sys_open")
     if usr_open is None: skipped.append("usr_open")
     if asst_open is None: skipped.append("asst_open")
+    if asst_head is None: skipped.append("asst_head")
+    if asst_close is None: skipped.append("asst_close")
     if gap1 is None: skipped.append("gap1")
     if usr_close is None: skipped.append("usr_close")
     if tail_gen is None: skipped.append("tail")
@@ -80,10 +100,12 @@ def extract_surfaces(render: Callable[[list[dict]], str]) -> dict:
     return {
         "sys_open": sys_open, "sys_close": sys_close or None,
         "usr_open": usr_open, "usr_close": usr_close or None,
-        "asst_open": asst_open, "head": sys_open,
+        "asst_open": asst_open, "asst_head": asst_head or None,
+        "asst_close": asst_close or None,
+        "head": sys_open,
         "tail": tail_gen,
         "render_log": {"user": r_usr, "user_gen": r_usr_gen,
-                       "sys_user": r_su},
+                       "sys_user": r_su, "user_asst": r_ua},
         "skipped": skipped,
     }
 

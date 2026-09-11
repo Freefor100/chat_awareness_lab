@@ -31,6 +31,8 @@ def parse_args(argv=None):
     p.add_argument("--models", nargs="*", default=[])
     p.add_argument("--experiments", nargs="*",
                    default=["E1", "E2", "E4", "E5", "E6", "E7"])
+    p.add_argument("--attacks", nargs="*", default=[],
+                   help="只跑指定的攻击编号（如 A11a A11b），留空表示全跑")
     p.add_argument("--sample-size", choices=["smoke", "formal"], default="smoke")
     p.add_argument("--tokenizer-only", action="store_true")
     p.add_argument("--dry-run", action="store_true")
@@ -166,7 +168,8 @@ def main(argv=None):
             else:
                 stats = run_experiments(be, exp_list, cfg["key"], run_dir, gen, n,
                                         revision=rev, template_sha=sha, modes=modes,
-                                        dry_run=args.dry_run)
+                                        dry_run=args.dry_run,
+                                        attacks=args.attacks or None)
                 print(f"[{args.stage}] {cfg['key']}: {stats['cases_run']} cases "
                       f"({stats['metrics_rows']} metric rows) -> {run_dir}")
         be.release()

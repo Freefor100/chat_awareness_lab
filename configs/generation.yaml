@@ -1,5 +1,8 @@
 max_new_tokens: 512
 reproduction_max_new_tokens: 1024   # E1/E2/E4 复述组
+# 两段式多轮（A11a–c）：第 1 轮的回复由模型自己生成，长度上限单独收紧——
+# 那一段是"一段对话回复"，不是需要写满的长续写
+multi_turn_stage1_max_new_tokens: 256
 smoke:
   n_canaries: 20
 formal:

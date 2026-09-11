@@ -7,10 +7,11 @@
 # - E5/E6/E7 system 用 prompts/system_constraints.yaml 模板注入 marker/nonce。
 import random
 
-# {SYS_OPEN}..{ASST_OPEN} 占位符 → surfaces dict 键映射（_fill 与 E6 skip 守卫共用）
+# {SYS_OPEN}..{ASST_CLOSE} 占位符 → surfaces dict 键映射（_fill 与 E6 skip 守卫共用）
 _SURFACE_KEYS = {"SYS_OPEN": "sys_open", "SYS_CLOSE": "sys_close",
                  "USR_OPEN": "usr_open", "USR_CLOSE": "usr_close",
-                 "ASST_OPEN": "asst_open"}
+                 "ASST_OPEN": "asst_open", "ASST_HEAD": "asst_head",
+                 "ASST_CLOSE": "asst_close"}
 
 
 def _fill(template: str, canary: str, nonce: str | None, surfaces: dict | None) -> str:
@@ -57,13 +58,36 @@ def build_case(exp: str, attack_key: str, attacks_cfg: dict, constraints: dict,
     if exp == "E6":
         sys_p = _fill(constraints["e5_system"], canary, nonce, surfaces)
         a = next(x for x in attacks_cfg["attacks"] if x["id"] == attack_key)
-        text = a["template"]
+        chain = a.get("multi_turn_chain")
+        # 守卫与占位符填充都覆盖链式模板的第 1 轮载荷
+        text = a.get("template", "") + (chain["turn1"] if chain else "")
         # 模板中出现任何 surface 占位符而其值缺失（surfaces 为 None / 键缺 / 值为 None）→ 跳过，
         # 防止字面 "{SYS_OPEN}" 等注入串漏出；值为空串 ""（如 llama 的 asst_open）不算缺失
         if any("{" + k + "}" in text and (surfaces is None or surfaces.get(v) is None)
                for k, v in _SURFACE_KEYS.items()):
             return {"messages": [], "attack_meta": {"experiment": "E6", "attack": attack_key,
                                                     "skipped": "surface missing"},
+                    "token_override": None}
+        if chain:
+            payload = _fill(chain["turn1"], canary, nonce, surfaces)
+            msgs = [{"role": "system", "content": sys_p},
+                    {"role": "user", "content": payload}]
+            # turn1_reply 与 trigger 都可以不写：不写 turn1_reply 表示这条用例
+            # 只跑第 1 轮（消息到此为止，直接生成）；不写 trigger 同理。
+            reply = chain.get("turn1_reply")
+            if reply == "generated":
+                # content 为 None 表示"这一轮由模型自己生成"，runner 负责回填
+                msgs.append({"role": "assistant", "content": None})
+            elif reply:
+                msgs.append({"role": "assistant", "content": reply})
+            for role, txt in chain.get("gap", []):
+                msgs.append({"role": role, "content": txt})
+            if chain.get("trigger"):
+                msgs.append({"role": "user", "content": chain["trigger"]})
+            return {"messages": msgs,
+                    "attack_meta": {"experiment": "E6", "attack": attack_key,
+                                    "multi_turn_chain": True,
+                                    "stage1_generated": reply == "generated"},
                     "token_override": None}
         if a.get("multi_turn"):
             payload = _fill(text, canary, nonce, surfaces)

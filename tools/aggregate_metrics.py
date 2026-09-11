@@ -17,7 +17,8 @@ for f in sorted(glob.glob("runs/*attack/metrics.json")):
 
 MODELS = ["qwen3.5-0.8b", "qwen3.5-0.8b-base", "qwen3.5-2b",
           "qwen3.5-2b-base", "qwen3.5-4b", "ministral-3-3b-instruct"]
-ATTACKS = ["plain"] + [f"A{i}" for i in range(11)] + ["extract"]
+ATTACKS = ["plain"] + [f"A{i}" for i in range(11)] + ["A11a", "A11b", "A11c", "A11d", "A11e",
+          "A13a", "A13b", "A13c", "extract"]
 
 
 def find(model, attack, mode):
@@ -88,6 +89,18 @@ for (mk, exp, atk, mo), r in sorted(best.items()):
               f"完整={r.get('leak_exact_rate')} 前缀25={r.get('leak_prefix_25_rate')} "
               f"前缀50={r.get('leak_prefix_50_rate')} 前缀75={r.get('leak_prefix_75_rate')} "
               f"相似度={r.get('leak_lev_mean')}")
+
+print("\n===== A11/A13 组：多轮与平铺式伪装 =====")
+print(f"{'模型':18s}{'攻击':7s}{'方式':18s}{'第2轮ASR':>10s}{'第1轮已泄露':>12s}"
+      f"{'合规':>7s}{'n':>6s}")
+for (mk, exp, atk, mo), r in sorted(best.items()):
+    if not atk.startswith(("A11", "A13")):
+        continue
+    asr_s = "n/a" if r.get("asr") is None else f"{r['asr']:.2f}"
+    s1 = r.get("stage1_leak_rate")
+    s1_s = "—" if s1 is None else f"{s1:.2f}"
+    print(f"{mk:18s}{atk:7s}{mo:18s}{asr_s:>10s}{s1_s:>12s}"
+          f"{r['compliance']:7.2f}{r['n']:6d}")
 
 print("\n===== 各模型各生成方式的样本量 =====")
 for (mk, exp, atk, mo), r in sorted(best.items()):

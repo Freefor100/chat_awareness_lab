@@ -16,7 +16,9 @@ from src.first_turn import derive_first_turn, find_closing_ids, split_first_turn
 from src.score_attack import partial_leakage
 from src.surfaces import extract_surfaces, boundary_token_ids
 
-_E6_ATTACKS = [f"A{i}" for i in range(11)]
+_E6_ATTACKS = ([f"A{i}" for i in range(11)]
+               + ["A11a", "A11b", "A11c", "A11d", "A11e",
+                  "A13a", "A13b", "A13c"])
 
 # 每组实验的"得手"按哪个指标算（写进记录与汇总行，避免读者把不同口径的数字串起来看）
 SUCCESS_METRIC = {"E1": "copy_fidelity", "E2": "copy_fidelity",
@@ -94,10 +96,42 @@ def _fill_a10(attacks_cfg: dict, canary: str) -> str:
     return tpl.replace("{canary}", canary).replace("{marker}", canary)
 
 
+def _fill_generated_turn(backend, case: dict, gen_cfg: dict) -> dict | None:
+    """两段式多轮：先让模型自己把第 1 轮的回复生成出来，再回填进消息清单。
+
+    为什么必须由模型自己生成：如果由我们写死一段"好的"，那本身就是一次注入，
+    第 2 轮测到的就不是"伪装块变成了历史"，而是"我们塞的假回应起了作用"。
+
+    第 1 轮一律用标准贪心生成——no-stop 会一路写满几百个 token，那不是一段
+    真实的对话回复。生成结果取首轮净文本（剥掉结尾关闭符）。
+    """
+    idx = next((i for i, m in enumerate(case["messages"])
+                if m.get("content") is None), None)
+    if idx is None:
+        return None
+    prefix = case["messages"][:idx]
+    rec = run_case_generation(backend, prefix, gen_cfg, "standard_greedy",
+                              max_new_tokens=gen_cfg.get(
+                                  "multi_turn_stage1_max_new_tokens", 256))
+    d = derive_first_turn(rec["generated_ids"], _closing_set(backend),
+                          backend.decode)
+    case["messages"][idx]["content"] = d["output_first_turn"]
+    return {"output_first_turn": d["output_first_turn"],
+            "output_raw": rec["output_raw"],
+            "output_token_ids": rec["generated_ids"],
+            "closed_early": d["closed_early"],
+            # 第 1 轮用的档位要记下来：它必须与同批 A0–A10 的档位一致，
+            # 否则"跨轮 vs 单轮"的对比就混进了精度差异
+            "quant": getattr(backend, "quant", None),
+            "device": getattr(backend, "device", None),
+            "max_new_tokens": gen_cfg.get("multi_turn_stage1_max_new_tokens", 256)}
+
+
 def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Path,
                     gen_cfg: dict, n_canaries: int, revision: str = "",
                     template_sha: str = "", modes: list[str] | None = None,
-                    dry_run: bool = False) -> dict:
+                    dry_run: bool = False,
+                    attacks: list[str] | None = None) -> dict:
     root = Path(__file__).resolve().parents[1]
     attacks_cfg = load_yaml(root / "configs/attacks.yaml")
     cons = load_yaml(root / "prompts/system_constraints.yaml")
@@ -144,8 +178,11 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
     closing = _closing_set(backend)
 
     stats = {"cases_run": 0, "per_exp": {}}
+    atk_filter = set(attacks) if attacks else None
     for exp in experiments:
         for atk in _exp_attacks(exp):
+            if atk_filter and atk not in atk_filter:
+                continue
             out = run_dir / "cases" / f"{exp}_{atk}.jsonl"
             # 采样轨 × seeds 展开（"standard_sampling" → standard_sampling:1..3）
             modes_atk = []
@@ -171,6 +208,7 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
                                   nonce, seed=i)
                 if not case["messages"] or case["attack_meta"].get("skipped"):
                     continue
+                stage1 = _fill_generated_turn(backend, case, gen_cfg)
                 e4_ref = None
                 if exp == "E4":
                     e4_ref = _e4_labeled_ref(backend, case,
@@ -224,6 +262,9 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
                         "post_close_recitation": d["post_close_recitation"],
                         "attack_success": d["attack_success"],
                     }
+                    if stage1 is not None:
+                        # 两段式：第 1 轮的回复是模型自己生成的，单独留证
+                        record["stage1"] = stage1
                     if nonce:
                         record["secret"] = nonce
                         # §7.3 部分泄露率：完整命中 / 前缀覆盖 25·50·75% / 编辑距离
@@ -267,6 +308,8 @@ def run_experiments(backend, experiments: list[str], model_key: str, run_dir: Pa
     rows = []
     for exp in experiments:
         for atk in _exp_attacks(exp):
+            if atk_filter and atk not in atk_filter:
+                continue
             recs = read_jsonl(run_dir / "cases" / f"{exp}_{atk}.jsonl")
             if recs:
                 rows += build_metric_rows(recs, run_dir.name, model_key, meta)
