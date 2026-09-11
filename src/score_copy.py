@@ -8,6 +8,22 @@ render_context 的 source_guess 聚合生成，键：
 from collections import Counter
 
 
+def fenced_block(text: str) -> str:
+    """取出内容里的代码围栏块;没有围栏就返回去掉首尾空白的原文。
+
+    E1/E2 比"逐字复制"时,提示里给的参照可能带着 ```json 之类的围栏,模型也
+    按提示把结果放进围栏里。围栏本身不是要求复制的内容,两边都要先剥掉再比。
+    """
+    out, inside = [], False
+    for ln in text.splitlines():
+        if ln.strip().startswith("```"):
+            inside = not inside
+            continue
+        if inside:
+            out.append(ln)
+    return "\n".join(out).strip() if out else text.strip()
+
+
 def exact_match(ref: str, out: str) -> bool:
     return ref == out
 

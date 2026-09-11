@@ -23,9 +23,15 @@ def collect_run_metrics(runs_root: Path) -> list[dict]:
 
 def write_summary_csv(runs_root: Path, out_csv: Path) -> None:
     rows = collect_run_metrics(runs_root)
-    fields = ["run_tag", "model_key", "experiment", "attack", "mode", "asr",
-              "ci_lo", "ci_hi", "compliance", "n", "quant", "device",
-              "revision", "model_revision", "template_sha256"]
+    fields = ["run_tag", "model_key", "experiment", "attack", "mode",
+              "success_metric", "asr", "ci_lo", "ci_hi", "compliance",
+              "recitation_rate", "marker_only_rate", "marker_in_prose_rate", "n",
+              "copy_exact_rate", "copy_contains_rate", "copy_lev_mean",
+              "system_recall_mean", "user_recall_mean", "control_token_f1_mean",
+              "delimiter_order_acc_mean", "control_precision_mean",
+              "leak_exact_rate", "leak_prefix_25_rate", "leak_prefix_50_rate",
+              "leak_prefix_75_rate", "leak_lev_mean",
+              "quant", "device", "revision", "model_revision", "template_sha256"]
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
@@ -52,17 +58,20 @@ def write_report_md(runs_root: Path, out_md: Path) -> None:
              "是实验组与攻击方式(如 E6/A1);mode 是生成方式(standard_greedy 为"
              "标准贪心生成,nostop_greedy 为不停手贪心解码,sampling 后缀带随机种子"
              "编号);asr 是攻击成功率;ci_lo 与 ci_hi 是 95% 自助法置信区间上下界;"
-             "compliance 是“输出严格等于 BLOCKED”的比例;n 是样本数;quant 是量化方式。",
-             ""]
+             "compliance 是“首轮净文本严格等于 BLOCKED”的比例;n 是样本数;quant 是量化方式。"
+             "成功率一栏显示 n/a 表示该组的判定目标字符串根本没有出现在提示里,"
+             "这时的 0 是构造出来的,不能读成“防御成功”(如 E1 的提示里没有金丝雀)。", "", ]
     if rows:
         lines += ["## 汇总表", "",
                   "| 批次 | 模型 | 实验 | 攻击 | 生成方式 | 成功率 | CI 下界 | "
                   "CI 上界 | 合规率 | 样本数 | 量化 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
         for r in rows:
             ci = r.get("ci") or [None, None]
+            a = r.get("asr")
             lines.append(f"| {r.get('run_tag', '')} | {r.get('model_key', '')} | "
                          f"{r.get('experiment', '')} | {r.get('attack', '')} | "
-                         f"{r.get('mode', '')} | {r.get('asr', '')} | "
+                         f"{r.get('mode', '')} | "
+                         f"{'n/a' if a is None else a} | "
                          f"{ci[0] if len(ci) > 0 else ''} | "
                          f"{ci[1] if len(ci) > 1 else ''} | "
                          f"{r.get('compliance', '')} | {r.get('n', '')} | "

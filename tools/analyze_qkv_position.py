@@ -1,6 +1,6 @@
 """实测:同一个分隔符编号,站在真位置和假位置,模型内部算出来的东西差多少。
 
-背景:机制实验已经证明,用户消息里写的 <|fim_prefix|> 和模板放的真实边界,
+背景:机制实验已经证明,用户消息里写的 <|im_start|> 和模板放的真实边界,
 分词后是同一个编号(248045)。但"编号相同"不等于"模型内部的表示相同"——
 注意力计算中,查询(q)和键(k)会先按位置做旋转(位置编码),而且每个位置
 只能注意到它前面的内容。因此:
@@ -23,9 +23,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 MODEL = "Qwen/Qwen3.5-0.8B"
 CASE = "runs/20260907_205249_qwen3.5-0.8b_attack/cases/E6_A6.jsonl"
-# 词表里同时存在 <|object_ref_start|>/<|fim_middle|>(248060/248062,多模态谱系遗留);
-# 当前纯文本模板实际使用的是 <|fim_prefix|>/<|fim_middle|> 这一对。
-IM_START_NAME = None  # 不再用词表键名(显示层易混淆);直接取序列首位
+# 复核提示:该模型的词表里还留着一批没用上的历史条目(如 <|fim_prefix|>、
+# <|fim_middle|>、<|object_ref_start|> 等),它们与模板真正使用的
+# <|im_start|>(248045)/<|im_end|>(248046) 不是一回事。判断"模板用的是哪一个"
+# 要看渲染文本与编号,不要看词表里有哪些名字。
+CONTROL_TEXT = "<|im_start|>"   # 真实系统轮起始符的文本形式
+CONTROL_ID = 248045             # 它在 Qwen3.5 分词器里的编号
 
 
 def cos(a, b):
@@ -41,6 +44,10 @@ ids_list = tok.apply_chat_template(rows[0]["messages"], tokenize=True,
 ids = torch.tensor([ids_list])
 
 im_start = ids_list[0]  # 序列第 0 位就是真的 im_start(模板首字符)
+# 自检:序列首位必须就是模板用的那个真实分隔符,免得改名或换模型后结论失准
+assert tok.decode([im_start], skip_special_tokens=False) == CONTROL_TEXT, \
+    f"序列首位不是 {CONTROL_TEXT}:{tok.decode([im_start], skip_special_tokens=False)!r}"
+assert im_start == CONTROL_ID, f"分隔符编号变了:{im_start} ≠ {CONTROL_ID}"
 occ = [i for i, t in enumerate(ids_list) if t == im_start]
 # 两次后接 "system" 的出现:第一次是真 system 轮开头,第二次是用户正文里的假货
 sys_occ = [i for i in occ

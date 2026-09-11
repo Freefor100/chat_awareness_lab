@@ -42,7 +42,11 @@ def manual_generate(backend, input_ids: list[int], max_new_tokens: int,
     if do_sample:
         torch.manual_seed(seed)
     ids = list(input_ids)
-    meta = {"mode": "nostop", "seed": seed, "kv_path": None}
+    meta = {"mode": "nostop", "seed": seed, "kv_path": None,
+            # 与标准轨对齐：no-stop 行也要能看出跑在什么档位、什么设备上
+            "quant": getattr(backend, "quant", None),
+            "device": getattr(backend, "device", None),
+            "backend": getattr(backend, "backend_name", None)}
     use_kv = hasattr(backend, "forward_step")
     past = None
     for step in range(max_new_tokens):
