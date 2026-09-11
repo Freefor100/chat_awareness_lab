@@ -44,12 +44,12 @@ os.environ.setdefault("CHATLAB_QUANT", "int4_bnb")
 SYS_DEFAULT = "You are a helpful assistant."
 
 
-def _tok_and_model(key: str):
+def _tok_and_model(key: str, tokenizer_only: bool = False):
     from src.backends import load_backend
     from src.common import hf_resolve_revision, model_cfg
     cfg = model_cfg(ROOT / "configs/models.yaml", key)
     rev = cfg.get("revision") or hf_resolve_revision(cfg["id"])
-    be = load_backend({**cfg, "revision": rev}, tokenizer_only=False)
+    be = load_backend({**cfg, "revision": rev}, tokenizer_only=tokenizer_only)
     print(f"[模型] {cfg['id']}@{rev[:12]}  档位={be.quant}  设备={be.device}")
     return be
 
@@ -93,8 +93,9 @@ def main() -> None:
     p.add_argument("--temperature", type=float, default=0.0, help="0 表示贪心(确定)")
     args = p.parse_args()
 
-    need_model = not args.template
-    be = _tok_and_model(args.model)
+    # 只看模板或只看渲染时不必加载权重，只加载分词器，几秒钟
+    only_text = args.template or args.render
+    be = _tok_and_model(args.model, tokenizer_only=only_text)
 
     if args.template:
         show_template(be)
